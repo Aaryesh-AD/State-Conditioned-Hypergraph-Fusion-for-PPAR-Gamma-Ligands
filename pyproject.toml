@@ -1,0 +1,117 @@
+[project]
+name = "mlg-project-repo-t6"
+version = "0.1.0"
+description = "Working Repo for Bioinformatics GNN Project MLG"
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [
+    {name = "Ankit Bansal"},
+    {name = "Aaryesh Deshpande"},
+    {name = "Hargobind Singh"},
+    {name = "Lingyu Kong"},
+    {name = "Sudarshan Anand"}
+]
+
+dependencies = [
+    # Core Scientific
+    "numpy>=2.3.2",
+    "scipy>=1.14.1",
+    "pandas>=2.2.3",
+    "polars>=1.32.3",
+    "scikit-learn>=1.6.0",
+    "matplotlib>=3.9.2",
+    "seaborn>=0.13.2",
+
+    # PyTorch Stack (CPU by default; install CUDA builds per-host if needed)
+    "torch==2.7.1",
+    "torchvision==0.22.1",
+    "torchaudio==2.7.1",
+    "torchmetrics>=0.11.4",
+    "torchinfo>=1.8.0",
+    "torchtyping>=0.1.4",
+
+    # Transformers & friends
+    "transformers<=4.42.0",
+    "tokenizers>=0.22.0",
+    "datasets>=4.1.0",
+    "esm<=3.2.1",
+
+    # Graph Neural Networks
+    # NOTE: torch-geometric can import on 3.13 without the C-exts; some ops will require extras below.
+    "torch-geometric>=2.6.1",
+    "networkx>=3.3",
+
+    # Bioinformatics
+    "biopython>=1.85",
+    "rdkit>=2022.9.5",
+    "py3Dmol>=2.1.0",
+    "mdanalysis>=2.7.0",
+    "scikit-bio>=0.6.0",
+
+    # Utilities
+    "click>=8.2.1",
+    "typer>=0.16.0",
+    "loguru>=0.7.3",
+    "tqdm>=4.66.4",
+    "rich>=14.1.0",
+    "typing-extensions>=4.14.1",
+    "python-dotenv>=1.1.1",
+    "pyarrow>=21.0.0",
+
+    # Interactive / Notebook
+    "jupyter>=1.1.1",
+    "notebook>=7.2.2",
+    "ipykernel>=6.29.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Code Quality & Typing
+    "black>=24.10.0",
+    "flake8>=7.1.1",
+    "mypy>=1.13.0",
+    "ruff>=0.5.7",
+    "types-networkx>=3.3.0",
+
+    # Testing
+    "pytest>=8.3.2",
+    "pytest-cov>=5.1.0",
+
+    # Pre-commit Hooks
+    "pre-commit>=4.0.0",
+
+    # Docs
+    "sphinx>=8.0.2",
+    "myst-parser>=3.0.1",
+    "sphinx-rtd-theme>=3.0.1",
+]
+
+# CUDA-related deps you might add per-host (install with uv pip on GPU nodes).
+cuda = [
+    # Leave flash-attn out by default; install per GPU host if supported.
+    # "flash-attn>=2.6.0,<3.0.0",
+]
+
+# PyG C-extensions as extras.
+# They are SKIPPED on Python 3.13 via environment markers to avoid source builds.
+pyg_ext = [
+    "torch-scatter>=2.1.2; python_version < '3.13'",
+    "torch-sparse>=0.6.18; python_version < '3.13'",
+    "torch-cluster>=1.6.3; python_version < '3.13'",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+cache-dir = ".uv-cache"
+resolution = "highest"
+
+[tool.mypy]
+mypy_path = ["src"]
+explicit_package_bases = true
+namespace_packages = true
+warn_unused_ignores = true
+show_error_codes = true
+ignore_missing_imports = true

@@ -1,0 +1,92 @@
+name: mlg-project-repo-t6
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  # Python
+  - python>=3.13
+
+  # Core Scientific Computing
+  - numpy
+  - scipy
+  - pandas
+  - polars
+  - scikit-learn
+  - matplotlib
+  - seaborn
+
+  # PyTorch Stack (CUDA)
+  - pytorch
+  - pytorch-cuda=12.8
+  - torchvision
+  - torchaudio
+
+  # Networking & Graph
+  - networkx
+
+  # Bioinformatics
+  - biopython
+  - rdkit
+  - mdanalysis
+
+  # Utilities
+  - click
+  - tqdm
+  - typing-extensions
+  - python-dotenv
+  - pyarrow
+  - h5py
+
+  # Interactive / Notebook
+  - jupyter
+  - notebook
+  - ipykernel
+
+  # Development Tools (optional)
+  - black
+  - flake8
+  - mypy
+  - ruff
+  - pytest
+  - pytest-cov
+  - pre-commit
+  - sphinx
+  - sphinx-rtd-theme
+
+  # Pip-only dependencies
+  - pip
+  - pip:
+      # Transformers & LLMs
+      - transformers
+      - tokenizers
+      - esm
+      - datasets
+
+      # PyTorch Geometric Stack
+      - torch-geometric
+      - torch-sparse
+      - torch-scatter
+      - torch-cluster
+
+      # Additional PyTorch Tools
+      - torchtext
+      - torchdata
+      - torchmetrics
+      - torchinfo
+      - torchtyping
+
+      # Bioinformatics Visualization
+      - py3Dmol
+      - scikit-bio
+
+      # CLI & Utilities
+      - typer
+      - loguru
+      - rich
+
+      # Documentation
+      - myst-parser
