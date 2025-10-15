@@ -12,3 +12,18 @@ wheels/
 .scratch
 .bak
 .temp
+
+# Data
+Data/
+Output/
+Checkpoints/
+
+
+# Serialized
+.pkl
+.npz
+.pt
+.pth
+.h5
+.ckpt
+.parquet
