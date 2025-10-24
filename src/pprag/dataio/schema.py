@@ -10,7 +10,16 @@ Current Definitions:
 - Graph containers for ligand and pocket (residue) graphs
 - Hypergraph structures (incidence lists) for ligand pharmacophores
 
-TODO: Add this as we go along:
+Classes:
+    LigandRow: Row in ligand catalog CSV
+    TargetRow: Row in target catalog CSV
+    FeatureSpec: Feature dimensions and flags for featurization
+    ResidueFeats: Features for a single residue in pocket selection
+    PocketSelect: Selected pocket residues for a target chain
+    LigandGraph: Graph container for ligand atom graph + hypergraph
+    PocketGraph: Graph container for pocket residue graph
+
+# TODO: Add this as we go along:
 - Sample wrappers for attention, contrastive pretraining and finetuning
 - Outputs/diagnostics (soft contact maps, logits, etc.)
 
