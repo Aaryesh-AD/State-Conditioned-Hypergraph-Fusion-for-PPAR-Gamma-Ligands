@@ -224,3 +224,34 @@ CHARGE_MAP_PH7: Dict[str, int] = {
     'K': 1, 'R': 1, 'H': 1,  # positive (H can be protonated)
     'D': -1, 'E': -1,         # negative
 }
+
+# SMARTS patterns for pharmacophore detection
+HBD_SMARTS = [
+    "[#7H1,#7H2,#7H3]",  # Primary/secondary/tertiary amines with H
+    "[#8H1]",             # Hydroxyl
+    "[#16H1]",            # Thiol
+]
+
+HBA_SMARTS = [
+    "[#7&!$([#7H])]",     # Nitrogen without H (acceptor)
+    "[#8&!$([#8H])]",     # Oxygen without H (carbonyl, ether)
+    "[$([O]=[C,S,P])]",   # C=O, S=O, P=O
+]
+
+CATION_SMARTS = [
+    "[+1,+2,+3]",                    # Explicit positive charge
+    "[N+](~*)~*~*~*",                 # Quaternary nitrogen
+    "[$([NX4+])]",                    # Ammonium
+    "[$(C(=[O])[N+])]",               # Protonated amide
+]
+
+ANION_SMARTS = [
+    "[-1,-2,-3]",                     # Explicit negative charge
+    "[O-]",                           # Deprotonated oxygen
+    "[$([O-][C,S,P])]",               # Carboxylate, sulfonate, phosphate
+]
+
+HALOGEN_DONOR_SMARTS = [
+    "[F,Cl,Br,I]-[C]=[O]",            # X-C=O pattern
+    "[Cl,Br,I]-[c]",                  # Halogen on aromatic
+]
