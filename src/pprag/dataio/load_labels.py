@@ -11,7 +11,7 @@ Last Modified: 10/24/2025
 import csv
 from pathlib import Path
 from typing import List, cast, Literal
-from .schema import LigandRow, TargetRow
+from schema import LigandRow, TargetRow
 
 
 def load_ligands_csv(csv_path: str | Path) -> List[LigandRow]:
@@ -42,7 +42,7 @@ def load_target_csv(csv_path: str | Path) -> List[TargetRow]:
                 raise ValueError(f"Invalid state value: {state}. Expected 'agonist' or 'antagonist'")
             rows.append(TargetRow(
                 target_id=d["target_id"].strip(),
-                mol2_path=d["mol2_path"].strip(),      # protein MOL2
+                pdb_path=d["pdb_path"].strip(),      # protein MOL2
                 state=cast(Literal["agonist", "antagonist"], state),  # "agonist" or "antagonist"
                 ligand_path=d.get("ligand_path") or None
             ))

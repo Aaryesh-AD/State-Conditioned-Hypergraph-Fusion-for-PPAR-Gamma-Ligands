@@ -50,7 +50,7 @@ class LigandRow:
 @dataclass
 class TargetRow:
     target_id: str
-    mol2_path: str                                   # protein MOL2 path
+    pdb_path: str                                    # protein MOL2 path (named pdb_path in CSV)
     state: Literal["agonist", "antagonist"]          # from directory name
     ligand_path: Optional[str] = None                # co-complexed ligand MOL2
 
