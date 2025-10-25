@@ -115,3 +115,15 @@ namespace_packages = true
 warn_unused_ignores = true
 show_error_codes = true
 ignore_missing_imports = true
+
+# Suppress mypy errors for packages without type stubs
+[[tool.mypy.overrides]]
+module = [
+    "rdkit.*",
+    "MDAnalysis.*",
+    "Bio.*",
+    "sklearn.*",
+    "torch_geometric.*",
+]
+ignore_missing_imports = true
+ignore_errors = true
