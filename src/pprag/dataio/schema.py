@@ -32,6 +32,11 @@ from typing import List, Optional, Tuple, Dict, Literal
 import numpy as np
 
 
+def global_seed() -> int:
+    """Global seed for reproducibility across modules."""
+    return 16
+
+
 # Catalog row definitions
 @dataclass
 class LigandRow:
