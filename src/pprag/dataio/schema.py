@@ -142,3 +142,80 @@ class PocketGraph:
 # State mappings enum like
 STATE_TO_ID: Dict[str, int] = {"agonist": 0, "antagonist": 1, "partial": 2, "apo": 3}   # extendable in-case we add more
 ID_TO_STATE: Dict[int, str] = {v: k for k, v in STATE_TO_ID.items()}
+
+
+# Amino acid constants and mappings
+AA_ORDER = "ACDEFGHIKLMNPQRSTVWY"
+AA2IDX: Dict[str, int] = {aa: i for i, aa in enumerate(AA_ORDER)}
+
+# Three-letter to one-letter amino acid code conversion
+AA3_TO_AA1: Dict[str, str] = {
+    'ALA': 'A', 'CYS': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F', 'GLY': 'G', 'HIS': 'H', 'ILE': 'I',
+    'LYS': 'K', 'LEU': 'L', 'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S',
+    'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'
+}
+
+# Amino acid side-chain SMILES for RDKit-based calculations
+# These represent the side chain structure (without backbone)
+AA_SIDECHAIN_SMILES: Dict[str, str] = {
+    'A': 'C',                          # Alanine: methyl
+    'C': 'CS',                         # Cysteine: thiol
+    'D': 'CC(=O)[O-]',                 # Aspartate: carboxylate (charged)
+    'E': 'CCC(=O)[O-]',                # Glutamate: carboxylate (charged)
+    'F': 'Cc1ccccc1',                  # Phenylalanine: benzyl
+    'G': '[H]',                        # Glycine: hydrogen
+    'H': 'Cc1c[nH]cn1',                # Histidine: imidazole (can be protonated)
+    'I': 'C(C)C(C)C',                  # Isoleucine
+    'K': 'CCCC[NH3+]',                 # Lysine: amine (charged)
+    'L': 'CC(C)C',                     # Leucine
+    'M': 'CCSC',                       # Methionine: thioether
+    'N': 'CC(=O)N',                    # Asparagine: amide
+    'P': 'C1CCCN1',                    # Proline: pyrrolidine (cyclic)
+    'Q': 'CCC(=O)N',                   # Glutamine: amide
+    'R': 'CCCCNC(=[NH2+])N',           # Arginine: guanidinium (charged)
+    'S': 'CO',                         # Serine: hydroxyl
+    'T': 'C(C)O',                      # Threonine: hydroxyl
+    'V': 'C(C)C',                      # Valine
+    'W': 'Cc1c[nH]c2ccccc12',          # Tryptophan: indole
+    'Y': 'Cc1ccc(O)cc1',               # Tyrosine: phenol
+}
+
+# Full amino acid SMILES (with backbone) for more accurate property calculations
+# Format: NCC(R)C(=O)O where R is the side chain
+AA_FULL_SMILES: Dict[str, str] = {
+    'A': 'NCC(C)C(=O)O',                          # Alanine
+    'C': 'NCC(CS)C(=O)O',                         # Cysteine
+    'D': 'NCC(CC(=O)[O-])C(=O)O',                 # Aspartate
+    'E': 'NCC(CCC(=O)[O-])C(=O)O',                # Glutamate
+    'F': 'NCC(Cc1ccccc1)C(=O)O',                  # Phenylalanine
+    'G': 'NCC(=O)O',                              # Glycine
+    'H': 'NCC(Cc1c[nH]cn1)C(=O)O',                # Histidine
+    'I': 'NCC(C(C)CC)C(=O)O',                     # Isoleucine
+    'K': 'NCC(CCCC[NH3+])C(=O)O',                 # Lysine
+    'L': 'NCC(CC(C)C)C(=O)O',                     # Leucine
+    'M': 'NCC(CCSC)C(=O)O',                       # Methionine
+    'N': 'NCC(CC(=O)N)C(=O)O',                    # Asparagine
+    'P': 'N1CC(C(=O)O)CC1',                       # Proline
+    'Q': 'NCC(CCC(=O)N)C(=O)O',                   # Glutamine
+    'R': 'NCC(CCCCNC(=[NH2+])N)C(=O)O',           # Arginine
+    'S': 'NCC(CO)C(=O)O',                         # Serine
+    'T': 'NCC(C(C)O)C(=O)O',                      # Threonine
+    'V': 'NCC(C(C)C)C(=O)O',                      # Valine
+    'W': 'NCC(Cc1c[nH]c2ccccc12)C(=O)O',          # Tryptophan
+    'Y': 'NCC(Cc1ccc(O)cc1)C(=O)O',               # Tyrosine
+}
+
+# Kyte-Doolittle hydropathy index (positive=hydrophobic)
+# Kept as reference but prefer RDKit LogP-based calculation
+KD_HYDROPATHY: Dict[str, float] = {
+    'I': 4.5, 'V': 4.2, 'L': 3.8, 'F': 2.8, 'C': 2.5, 'M': 1.9, 'A': 1.8, 'G': -0.4, 'T': -0.7,
+    'S': -0.8, 'W': -0.9, 'Y': -1.3, 'P': -1.6, 'H': -3.2, 'E': -3.5, 'Q': -3.5, 'D': -3.5,
+    'N': -3.5, 'K': -3.9, 'R': -4.5
+}
+
+# Charge classification at physiological pH (~7.4)
+# Kept as reference but prefer RDKit formal charge calculation
+CHARGE_MAP_PH7: Dict[str, int] = {
+    'K': 1, 'R': 1, 'H': 1,  # positive (H can be protonated)
+    'D': -1, 'E': -1,         # negative
+}
