@@ -11,7 +11,7 @@ Last Modified: 10/24/2025
 import csv
 from pathlib import Path
 from typing import List, cast, Literal
-from schema import LigandRow, TargetRow
+from pprag.dataio.schema import LigandRow, TargetRow
 
 
 def load_ligands_csv(csv_path: str | Path) -> List[LigandRow]:
