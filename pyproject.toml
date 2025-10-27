@@ -21,7 +21,6 @@ dependencies = [
     "scikit-learn>=1.6.0",
     "matplotlib>=3.9.2",
     "seaborn>=0.13.2",
-
     # PyTorch Stack (CPU by default; install CUDA builds per-host if needed)
     "torch==2.7.1",
     "torchvision==0.22.1",
@@ -29,25 +28,21 @@ dependencies = [
     "torchmetrics>=0.11.4",
     "torchinfo>=1.8.0",
     "torchtyping>=0.1.4",
-
     # Transformers & friends
     "transformers<=4.42.0",
     "tokenizers>=0.22.0",
     "datasets>=4.1.0",
     "esm<=3.2.1",
-
     # Graph Neural Networks
     # NOTE: torch-geometric can import on 3.13 without the C-exts; some ops will require extras below.
     "torch-geometric>=2.6.1",
     "networkx>=3.3",
-
     # Bioinformatics
     "biopython>=1.85",
     "rdkit>=2022.9.5",
     "py3Dmol>=2.1.0",
     "mdanalysis>=2.7.0",
     "scikit-bio>=0.6.0",
-
     # Utilities
     "click>=8.2.1",
     "typer>=0.16.0",
@@ -57,11 +52,11 @@ dependencies = [
     "typing-extensions>=4.14.1",
     "python-dotenv>=1.1.1",
     "pyarrow>=21.0.0",
-
     # Interactive / Notebook
     "jupyter>=1.1.1",
     "notebook>=7.2.2",
     "ipykernel>=6.29.5",
+    "nglview>=3.1.4",
 ]
 
 [project.optional-dependencies]
