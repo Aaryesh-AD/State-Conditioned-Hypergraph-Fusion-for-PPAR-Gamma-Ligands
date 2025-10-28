@@ -323,7 +323,7 @@ def train_ligand_epoch(
             loss = loss / grad_accum_steps
 
         # Backward
-        if use_amp:
+        if use_amp and scaler is not None:
             scaler.scale(loss).backward()
         else:
             loss.backward()
@@ -331,8 +331,11 @@ def train_ligand_epoch(
         # Gradient accumulation
         if (batch_idx + 1) % grad_accum_steps == 0:
             if use_amp:
-                scaler.step(optimizer)
-                scaler.update()
+                if scaler is not None:
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    optimizer.step()
             else:
                 optimizer.step()
             optimizer.zero_grad()
@@ -391,7 +394,7 @@ def train_pocket_epoch(
             loss = loss / grad_accum_steps
 
         # Backward
-        if use_amp:
+        if use_amp and scaler is not None:
             scaler.scale(loss).backward()
         else:
             loss.backward()
@@ -399,8 +402,11 @@ def train_pocket_epoch(
         # Gradient accumulation
         if (batch_idx + 1) % grad_accum_steps == 0:
             if use_amp:
-                scaler.step(optimizer)
-                scaler.update()
+                if scaler is not None:
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    optimizer.step()
             else:
                 optimizer.step()
             optimizer.zero_grad()
