@@ -36,7 +36,7 @@ import MDAnalysis as mda
 from rdkit import Chem
 from rdkit import RDLogger
 from rdkit.Chem import rdMolDescriptors, rdFreeSASA
-from schema import (
+from pprag.dataio.schema import (
     ResidueFeats,
     PocketSelect,
     AA2IDX,

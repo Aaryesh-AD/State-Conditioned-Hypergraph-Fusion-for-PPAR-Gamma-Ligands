@@ -26,10 +26,10 @@ import typer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
-from load_labels import load_target_csv
-from splits import murcko_scaffold_split, write_phase_partitions
-from pocket_select import build_pocket_select
-from schema import global_seed
+from pprag.dataio.load_labels import load_target_csv
+from pprag.dataio.splits import murcko_scaffold_split, write_phase_partitions
+from pprag.dataio.pocket_select import build_pocket_select
+from pprag.dataio.schema import global_seed
 
 # Initialize Typer app and Rich console
 app = typer.Typer(

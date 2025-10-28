@@ -31,9 +31,9 @@ from typing import List, Tuple, Dict
 import random
 import json
 from pathlib import Path
-from load_labels import load_ligands_csv
-from murcko import group_by_scaffold
-from schema import global_seed
+from pprag.dataio.load_labels import load_ligands_csv
+from pprag.dataio.murcko import group_by_scaffold
+from pprag.dataio.schema import global_seed
 
 SEED = global_seed()
 
