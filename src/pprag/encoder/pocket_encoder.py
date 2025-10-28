@@ -41,7 +41,7 @@ class RBFEdgeEncoder(nn.Module):
     def __init__(self, d_in: int, d_out: int = 64):
         super().__init__()
         self.edge_net = nn.Sequential(
-            nn.Linear(d_in, d_out),  # RBF + contact flags
+            nn.Linear(d_in, d_out),  # RBF in includes contact flags
             nn.ReLU(),
             nn.Linear(d_out, d_out),
         )
@@ -290,7 +290,7 @@ class PocketEncoder(nn.Module):
         # Final projection
         self.out_proj = nn.Sequential(
             nn.Linear(d_model, d_model),
-            nn.LayerNorm(d_model),
+            # nn.LayerNorm(d_model),    # Disabled LayerNorm - smoothing issues for now!
         )
 
     def forward(self, x: Tensor, edge_index: Tensor, edge_attr: Tensor,
@@ -324,6 +324,8 @@ class PocketEncoder(nn.Module):
         z_poc = self.readout(h_residues, batch)  # (batch_size, d_model)
         z_poc = self.out_proj(z_poc)
 
+        # If pretrain loss wants unit vectors: TODO: Check
+        # z_poc_for_loss = F.normalize(z_poc, dim=-1)
         return z_poc, h_residues
 
 

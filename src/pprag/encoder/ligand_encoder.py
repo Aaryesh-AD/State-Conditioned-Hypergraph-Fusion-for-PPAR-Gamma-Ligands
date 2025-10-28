@@ -246,7 +246,7 @@ class LigandEncoder(nn.Module):
         # Final projection
         self.out_proj = nn.Sequential(
             nn.Linear(d_model, d_model),
-            nn.LayerNorm(d_model),
+            # nn.LayerNorm(d_model),   # Disabled LayerNorm - smoothing issues for now!
         )
 
     def forward(self, x: Tensor, edge_index: Tensor, edge_attr: Tensor,
@@ -296,6 +296,8 @@ class LigandEncoder(nn.Module):
         z_lig = self.readout(h_fused, batch)  # (batch_size, d_model)
         z_lig = self.out_proj(z_lig)
 
+        # If pretrain loss wants unit vectors: TODO: Check
+        # z_lig_for_loss = F.normalize(z_lig, dim=-1)
         return z_lig, h_fused, attn_dict
 
 
