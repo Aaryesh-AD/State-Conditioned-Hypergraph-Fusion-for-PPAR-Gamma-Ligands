@@ -30,8 +30,29 @@ import typer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
 from rich.table import Table
-from pocket_encoder import PocketEncoder
+from pprag.encoder.pocket_encoder import PocketEncoder
 from pprag.dataio.schema import PocketGraph
+
+_LEGACY_MODULE_MAP = {
+    "schema": "pprag.dataio.schema",
+    "dataio.schema": "pprag.dataio.schema",
+    "pprag.schema": "pprag.dataio.schema",
+}
+
+
+class _CompatUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        module = _LEGACY_MODULE_MAP.get(module, module)
+        return super().find_class(module, name)
+
+
+def _compat_pickle_load(f):
+    try:
+        return pickle.load(f)
+    except ModuleNotFoundError:
+        # Fallback: remap legacy module names -> current
+        f.seek(0)
+        return _CompatUnpickler(f).load()
 
 
 app = typer.Typer(
@@ -78,8 +99,39 @@ class PocketGraphDataset(Dataset):
         pkl_path = self.pocket_files[idx]
 
         with open(pkl_path, 'rb') as f:
-            poc_graph = pickle.load(f)
+            data = _compat_pickle_load(f)
 
+        # Handle different pickle formats
+        if isinstance(data, list):
+            # If pickle contains a list, try to extract PocketGraph
+            if len(data) == 0:
+                raise ValueError(f"Empty list in pickle file: {pkl_path}")
+            elif len(data) == 1:
+                # Single-element list
+                poc_graph = data[0]
+            else:
+                # Multiple elements - find the PocketGraph
+                poc_graph = None
+                for item in data:
+                    if isinstance(item, PocketGraph):
+                        poc_graph = item
+                        break
+
+                if poc_graph is None:
+                    raise TypeError(
+                        f"Could not find PocketGraph in list of {len(data)} items. "
+                        f"Types found: {[type(x).__name__ for x in data]}"
+                    )
+        elif isinstance(data, PocketGraph):
+            # Direct PocketGraph object
+            poc_graph = data
+        else:
+            raise TypeError(
+                f"Expected PocketGraph or list containing PocketGraph, "
+                f"got {type(data).__name__} in {pkl_path}"
+            )
+
+        # Verify we got a PocketGraph
         if not isinstance(poc_graph, PocketGraph):
             raise TypeError(f"Expected PocketGraph, got {type(poc_graph)}")
 

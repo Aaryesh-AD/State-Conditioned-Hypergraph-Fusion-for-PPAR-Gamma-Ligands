@@ -38,10 +38,10 @@ class RBFEdgeEncoder(nn.Module):
         d_out: Output edge embedding dimension
     """
 
-    def __init__(self, d_rbf: int = 16, d_out: int = 64):
+    def __init__(self, d_in: int, d_out: int = 64):
         super().__init__()
         self.edge_net = nn.Sequential(
-            nn.Linear(d_rbf + 3, d_out),  # RBF + contact flags
+            nn.Linear(d_in, d_out),  # RBF + contact flags
             nn.ReLU(),
             nn.Linear(d_out, d_out),
         )
@@ -125,7 +125,7 @@ class ResidueGNN(nn.Module):
 
         # Input projection
         self.node_embed = nn.Linear(d_node, d_hidden)
-        self.edge_encoder = RBFEdgeEncoder(d_edge, d_hidden)
+        self.edge_encoder = RBFEdgeEncoder(d_in=d_edge, d_out=d_hidden)
 
         # GAT layers
         self.convs = nn.ModuleList()

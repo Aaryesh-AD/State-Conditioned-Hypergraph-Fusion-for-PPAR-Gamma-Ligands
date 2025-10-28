@@ -30,8 +30,29 @@ import typer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
 from rich.table import Table
-from ligand_encoder import LigandEncoder
+from pprag.encoder.ligand_encoder import LigandEncoder
 from pprag.dataio.schema import LigandGraph
+
+_LEGACY_MODULE_MAP = {
+    "schema": "pprag.dataio.schema",
+    "dataio.schema": "pprag.dataio.schema",
+    "pprag.schema": "pprag.dataio.schema",
+}
+
+
+class _CompatUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        module = _LEGACY_MODULE_MAP.get(module, module)
+        return super().find_class(module, name)
+
+
+def _compat_pickle_load(f):
+    try:
+        return pickle.load(f)
+    except ModuleNotFoundError:
+        # Fallback: remap legacy module names -> current
+        f.seek(0)
+        return _CompatUnpickler(f).load()
 
 
 app = typer.Typer(
@@ -71,8 +92,39 @@ class LigandGraphDataset(Dataset):
         pkl_path = self.ligand_files[idx]
 
         with open(pkl_path, 'rb') as f:
-            lig_graph = pickle.load(f)
+            data = _compat_pickle_load(f)
 
+        # Handle different pickle formats
+        if isinstance(data, list):
+            # If pickle contains a list, try to extract LigandGraph
+            if len(data) == 0:
+                raise ValueError(f"Empty list in pickle file: {pkl_path}")
+            elif len(data) == 1:
+                # Single-element list
+                lig_graph = data[0]
+            else:
+                # Multiple elements - find the LigandGraph
+                lig_graph = None
+                for item in data:
+                    if isinstance(item, LigandGraph):
+                        lig_graph = item
+                        break
+
+                if lig_graph is None:
+                    raise TypeError(
+                        f"Could not find LigandGraph in list of {len(data)} items. "
+                        f"Types found: {[type(x).__name__ for x in data]}"
+                    )
+        elif isinstance(data, LigandGraph):
+            # Direct LigandGraph object
+            lig_graph = data
+        else:
+            raise TypeError(
+                f"Expected LigandGraph or list containing LigandGraph, "
+                f"got {type(data).__name__} in {pkl_path}"
+            )
+
+        # Verify we got a LigandGraph
         if not isinstance(lig_graph, LigandGraph):
             raise TypeError(f"Expected LigandGraph, got {type(lig_graph)}")
 

@@ -24,7 +24,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from typing import Optional, Tuple
 from torch_geometric.nn import GINEConv
-from layers_hypergraph import HypergraphEncoder
+from pprag.encoder.layers_hypergraph import HypergraphEncoder
 
 
 class AtomGNN(nn.Module):
