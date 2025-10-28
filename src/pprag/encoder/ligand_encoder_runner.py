@@ -79,7 +79,7 @@ class LigandGraphDataset(Dataset):
         return lig_graph, pkl_path.stem  # Return graph and ligand_id
 
 
-def collate_ligand_graphs(batch: List[tuple]) -> tuple:
+def collate_ligand_graphs(batch: List[tuple]) -> dict:
     """
     Collate function for DataLoader - handles variable-sized graphs.
 
