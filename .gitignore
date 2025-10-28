@@ -18,6 +18,7 @@ Data/
 Output/
 Checkpoints/
 temp/
+logs/
 
 # Serialized
 .pkl
