@@ -20,6 +20,7 @@ Last Modified: 10/25/2025
 """
 
 import pickle
+import pandas as pd
 from pathlib import Path
 from typing import Optional
 import typer
@@ -27,7 +28,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from pprag.dataio.load_labels import load_target_csv
-from pprag.dataio.splits import murcko_scaffold_split, write_phase_partitions
+from pprag.dataio.splits import murcko_scaffold_split, stratified_scaffold_split, write_phase_partitions
 from pprag.dataio.pocket_select import build_pocket_select
 from pprag.dataio.schema import global_seed
 
@@ -113,6 +114,11 @@ def main(
         min=0.05,
         max=0.5,
     ),
+    stratified: bool = typer.Option(
+        True,
+        "--stratified/--no-stratified",
+        help="Use class-stratified, scaffold-aware split (agonist, antagonist, and their decoys)"
+    ),
 ) -> None:
     """
     Prepare PPAR-gamma dataset: scaffold splits, phase partitions, and pocket features.
@@ -153,29 +159,43 @@ def main(
     # Create output directories
     meta_out.mkdir(parents=True, exist_ok=True)
 
-    console.print("\n[bold cyan]═══ PPAR-gamma Data Preparation Pipeline ═══[/bold cyan]\n")
+    console.print("\n[bold cyan]PPAR-gamma Data Preparation Pipeline[/bold cyan]\n")
 
     # ===== STEP 1: Scaffold Splitting =====
-    console.print("[bold yellow]Step 1:[/bold yellow] Murcko Scaffold-Based Splitting")
+    console.print("[bold yellow]Step 1:[/bold yellow] Scaffold-Based Splitting")
     console.print(f"  • Ligands CSV: [cyan]{ligands_csv}[/cyan]")
     console.print(f"  • Random seed: [cyan]{seed}[/cyan]")
     console.print(f"  • Split ratios: [cyan]{train_frac:.1%}[/cyan] train / "
                   f"[cyan]{val_frac:.1%}[/cyan] val / "
                   f"[cyan]{1 - train_frac - val_frac:.1%}[/cyan] test")
+    console.print(f"  • Mode: [cyan]{'STRATIFIED (4-way: agonist, antagonist, agonist_decoy, antagonist_decoy)' if stratified else 'Murcko-only (no class stratification)'}[/cyan]")
     console.print("  [dim]Note: RDKit warnings for invalid SMILES are suppressed[/dim]\n")
 
     with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
-        task = progress.add_task("Computing Murcko scaffolds...", total=None)
-        train_ids, val_ids, test_ids = murcko_scaffold_split(
-            ligands_csv,
-            seed=seed,
-            train_frac=train_frac,
-            val_frac=val_frac
-        )
+         SpinnerColumn(),
+         TextColumn("[progress.description]{task.description}"),
+         console=console,) as progress:
+        task = progress.add_task("Computing scaffold splits...", total=None)
+        if stratified:
+            # Class-stratified, scaffold-aware split (keeps whole Murcko scaffolds; balances
+            # agonist/antagonist and their decoys per split).  :contentReference[oaicite:1]{index=1}
+            df_lig = pd.read_csv(ligands_csv)
+            frac = (train_frac, val_frac, 1.0 - train_frac - val_frac)
+            splits = stratified_scaffold_split(
+                df_lig,
+                frac=frac,
+                seed=seed,
+                label_mode="4way",  # agonist / antagonist / agonist_decoy / antagonist_decoy
+            )
+            train_ids, val_ids, test_ids = splits["train"], splits["val"], splits["test"]
+        else:
+            # Original Murcko-only split (no class stratification)
+            train_ids, val_ids, test_ids = murcko_scaffold_split(
+                ligands_csv,
+                seed=seed,
+                train_frac=train_frac,
+                val_frac=val_frac,
+            )
         progress.update(task, completed=True)
 
     # Display split statistics
