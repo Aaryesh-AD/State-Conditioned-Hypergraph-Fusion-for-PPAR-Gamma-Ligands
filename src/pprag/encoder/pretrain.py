@@ -436,14 +436,23 @@ class ContrastivePretrainer(nn.Module):
                     node_map = torch.zeros(n_nodes_orig, dtype=torch.long, device=x.device)
                     node_map[keep_mask1] = torch.arange(keep_mask1.sum().item(), device=x.device)
 
-                    # Filter and remap hyperedge members
+                    # Convert to CPU once for fast access (avoid repeated GPU-CPU sync)
+                    keep_mask_cpu = keep_mask1.cpu()
+                    node_map_cpu = node_map.cpu()
+
+                    # Filter and remap hyperedge members (vectorized)
                     new_hyperedge_members = []
                     for members in kwargs['hyperedge_members']:
-                        # Keep only members that weren't dropped
-                        valid_members = [m for m in members if keep_mask1[m]]
-                        if len(valid_members) > 0:
-                            # Remap to new indices
-                            new_members = [node_map[m].item() for m in valid_members]
+                        # Convert members list to tensor for vectorized operations
+                        members_tensor = torch.tensor(members, dtype=torch.long)
+
+                        # Keep only members that weren't dropped (vectorized check)
+                        valid_mask = keep_mask_cpu[members_tensor]
+
+                        if valid_mask.any():
+                            valid_members_tensor = members_tensor[valid_mask]
+                            # Remap to new indices (vectorized)
+                            new_members = node_map_cpu[valid_members_tensor].tolist()
                             new_hyperedge_members.append(new_members)
 
                     kwargs_view1['hyperedge_members'] = new_hyperedge_members if new_hyperedge_members else None
@@ -473,14 +482,23 @@ class ContrastivePretrainer(nn.Module):
                     node_map = torch.zeros(n_nodes_orig, dtype=torch.long, device=x.device)
                     node_map[keep_mask2] = torch.arange(keep_mask2.sum().item(), device=x.device)
 
-                    # Filter and remap hyperedge members
+                    # Convert to CPU once for fast access (avoid repeated GPU-CPU sync)
+                    keep_mask_cpu = keep_mask2.cpu()
+                    node_map_cpu = node_map.cpu()
+
+                    # Filter and remap hyperedge members (vectorized)
                     new_hyperedge_members = []
                     for members in kwargs['hyperedge_members']:
-                        # Keep only members that weren't dropped
-                        valid_members = [m for m in members if keep_mask2[m]]
-                        if len(valid_members) > 0:
-                            # Remap to new indices
-                            new_members = [node_map[m].item() for m in valid_members]
+                        # Convert members list to tensor for vectorized operations
+                        members_tensor = torch.tensor(members, dtype=torch.long)
+
+                        # Keep only members that weren't dropped (vectorized check)
+                        valid_mask = keep_mask_cpu[members_tensor]
+
+                        if valid_mask.any():
+                            valid_members_tensor = members_tensor[valid_mask]
+                            # Remap to new indices (vectorized)
+                            new_members = node_map_cpu[valid_members_tensor].tolist()
                             new_hyperedge_members.append(new_members)
 
                     kwargs_view2['hyperedge_members'] = new_hyperedge_members if new_hyperedge_members else None
