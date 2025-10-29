@@ -14,12 +14,12 @@ For optimal performance, first generate pocket selections using prep_main.py,
 then provide the directory via --pockets-pkl. This avoids redundant computation.
 
 Usage:
-    python3 src/pprag/dataio/build_dataset.py \
+    python3 src/pprag/graphs/build_dataset.py \
         --ligands-csv Data/meta/ligands_clean.csv \
         --pockets-csv Data/meta/pockets.csv \
         --output-dir Output/graphs \
-        --splits-dir Output/splits \
-        --pockets-pkl Output/pockets
+        --splits-dir Output/splits_new \
+        --pockets-pkl Output/pockets_new
 
 Author: Aaryesh Deshpande
 Last Modified: 10/25/2025
@@ -164,11 +164,13 @@ def process_pocket(row: TargetRow, fe: FeatureSpec, pockets_pkl_dir: Optional[Pa
 def load_split_ids(splits_dir: Path) -> Dict[str, Set[str]]:
     """Load train/val/test split IDs from JSON files."""
     splits = {}
-    for split_name in ['train_ids', 'val_ids', 'test_ids']:
+    # Standard splits
+    for split_name in ['train_ids', 'val_ids', 'test_ids', 'zero_shot_ids', 'fewshot_pool']:
         split_file = splits_dir / f"{split_name}.json"
         if split_file.exists():
+            key = split_name.replace('_ids', '')
             with open(split_file) as f:
-                splits[split_name.replace('_ids', '')] = set(json.load(f))
+                splits[key] = set(json.load(f))
         else:
             console.print(f"[yellow]Warning: {split_file} not found, skipping split[/yellow]")
     return splits
