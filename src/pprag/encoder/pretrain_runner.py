@@ -375,6 +375,13 @@ def train_pocket_epoch(
         edge_attr = batch_data['edge_attr'].to(device)
         batch_tensor = batch_data['batch'].to(device)
         states = batch_data['states'].to(device)
+        # Validate input data for NaN/Inf
+        if torch.isnan(x).any() or torch.isinf(x).any():
+            print(f"[WARNING] Batch {batch_idx}: NaN/Inf in node features, skipping...")
+            continue
+        if torch.isnan(edge_attr).any() or torch.isinf(edge_attr).any():
+            print(f"[WARNING] Batch {batch_idx}: NaN/Inf in edge attributes, skipping...")
+            continue
 
         # Mixed precision forward
         if use_amp:
@@ -398,6 +405,8 @@ def train_pocket_epoch(
             scaler.scale(loss).backward()
         else:
             loss.backward()
+        # Gradient clipping to prevent exploding gradients
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
         # Gradient accumulation
         if (batch_idx + 1) % grad_accum_steps == 0:

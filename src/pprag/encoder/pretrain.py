@@ -143,18 +143,25 @@ class GraphAugmentor:
 
     @staticmethod
     def combine_augmentations(x: Tensor, edge_index: Tensor, edge_attr: Tensor,
-                              aug_type: str = 'random') -> Tuple[Tensor, Tensor, Tensor]:
+                              aug_type: str = 'random') -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Apply random combination of augmentations.
 
         Args:
             aug_type: 'random', 'node_drop', 'edge_pert', 'feat_mask', 'all'
+
+        Returns:
+            x_aug: Augmented node features
+            ei_aug: Augmented edge index
+            ea_aug: Augmented edge attributes
+            keep_mask: Boolean mask of kept nodes (None if no node dropping)
         """
         if aug_type == 'random':
             aug_type = random.choice(['node_drop', 'edge_pert', 'feat_mask'])
 
+        keep_mask = None
         if aug_type == 'node_drop':
-            x_aug, ei_aug, ea_aug, _ = GraphAugmentor.node_dropping(
+            x_aug, ei_aug, ea_aug, keep_mask = GraphAugmentor.node_dropping(
                 x, edge_index, edge_attr, drop_ratio=0.1
             )
         elif aug_type == 'edge_pert':
@@ -162,13 +169,15 @@ class GraphAugmentor:
             ei_aug, ea_aug = GraphAugmentor.edge_perturbation(
                 edge_index, edge_attr, x.size(0), add_ratio=0.1, drop_ratio=0.1
             )
+            keep_mask = torch.ones(x.size(0), dtype=torch.bool, device=x.device)
         elif aug_type == 'feat_mask':
             x_aug = GraphAugmentor.feature_masking(x, mask_ratio=0.15)
             ei_aug = edge_index
             ea_aug = edge_attr
+            keep_mask = torch.ones(x.size(0), dtype=torch.bool, device=x.device)
         elif aug_type == 'all':
             # Apply all augmentations sequentially
-            x_aug, ei_aug, ea_aug, _ = GraphAugmentor.node_dropping(
+            x_aug, ei_aug, ea_aug, keep_mask = GraphAugmentor.node_dropping(
                 x, edge_index, edge_attr, drop_ratio=0.05
             )
             ei_aug, ea_aug = GraphAugmentor.edge_perturbation(
@@ -178,7 +187,7 @@ class GraphAugmentor:
         else:
             raise ValueError(f"Unknown augmentation type: {aug_type}")
 
-        return x_aug, ei_aug, ea_aug
+        return x_aug, ei_aug, ea_aug, keep_mask
 
 
 # PROJECTION HEADS
@@ -272,42 +281,64 @@ def state_aware_contrastive_loss(z: Tensor, states: Tensor,
         loss: Scalar contrastive loss
     """
     batch_size = z.size(0)
+    device = z.device
 
     # Normalize embeddings
     z = F.normalize(z, dim=-1)
 
-    # Compute similarity matrix
+    # Compute similarity matrix (scaled by temperature)
     sim_matrix = torch.mm(z, z.T) / temperature  # (B, B)
 
-    # Create mask for positive pairs (same state)
-    state_match = states.unsqueeze(0) == states.unsqueeze(1)  # (B, B)
+    # Create masks
+    state_match = (states.unsqueeze(0) == states.unsqueeze(1)).float()
+    diag_mask = torch.eye(batch_size, dtype=torch.float, device=device)
 
-    # Mask diagonal (self-similarity)
-    diag_mask = torch.eye(batch_size, dtype=torch.bool, device=z.device)
-    state_match = state_match & ~diag_mask
+    # Positive pairs: same state, not self
+    pos_mask = state_match * (1 - diag_mask)
 
-    # If no positive pairs exist, return zero loss
-    if not state_match.any():
-        return torch.tensor(0.0, device=z.device)
+    # Negative pairs: different state
+    neg_mask = (1 - state_match) * (1 - diag_mask)  # noqa
 
-    # Compute log-sum-exp for normalization
-    exp_sim = torch.exp(sim_matrix)
-    exp_sim = exp_sim.masked_fill(diag_mask, 0.0)  # Exclude self
+    # Safety check: If no positive pairs exist, return zero loss
+    if pos_mask.sum() == 0:
+        return torch.tensor(0.0, device=device, requires_grad=True)
 
-    # Sum over all negatives (different state) temperature-adjust hard negatives
-    # This mimics Debiased InfoNCE or Hard-Negative Contrastive Learning (HCL)
-    neg_mask = ~state_match & ~diag_mask
-    neg_sim = sim_matrix.masked_fill(~neg_mask, -1e9)
-    weights = torch.exp(neg_sim / (temperature * 0.5))  # softer focus
-    denom = weights.sum(dim=1, keepdim=True)
+    # Compute InfoNCE loss using logsumexp (numerically stable)
+    # For each anchor, loss = -log(sum(exp(pos)) / sum(exp(pos + neg)))
+    #                        = -logsumexp(pos) + logsumexp(pos + neg)
 
-    # Sum over positives (same state)
-    pos_sim = sim_matrix.masked_fill(~state_match, -1e9)  # small value for non-positives to avoid nan
-    pos_exp = torch.exp(pos_sim)
+    losses = []
+    for i in range(batch_size):
+        # Get positive and negative similarities for anchor i
+        pos_sims = sim_matrix[i][pos_mask[i] > 0]
 
-    # Compute loss
-    loss = -torch.log(pos_exp / (pos_exp + denom + 1e-8))
-    loss = loss[state_match].mean()
+        if len(pos_sims) == 0:
+            continue
+
+        # Get all non-self similarities (both pos and neg)
+        all_mask = 1 - diag_mask[i]
+        all_sims = sim_matrix[i][all_mask > 0]
+
+        # For numerical stability, use logsumexp
+        # Loss = -log(exp(pos) / sum(exp(all)))
+        #      = -pos + logsumexp(all)
+        for pos_sim in pos_sims:
+            loss_i = -pos_sim + torch.logsumexp(all_sims, dim=0)
+            losses.append(loss_i)
+
+    if len(losses) == 0:
+        return torch.tensor(0.0, device=device, requires_grad=True)
+
+    loss = torch.stack(losses).mean()
+
+    # Safety check for NaN/Inf
+    if torch.isnan(loss) or torch.isinf(loss):
+        print("\n[ERROR] NaN/Inf detected in loss computation!")
+        print(f"  Similarity matrix range: [{sim_matrix.min():.4f}, {sim_matrix.max():.4f}]")
+        print(f"  Embedding norm: {z.norm(dim=-1).mean():.4f}")
+        print(f"  Temperature: {temperature}")
+        print("  Returning zero loss to continue training...\n")
+        return torch.tensor(0.0, device=device, requires_grad=True)
 
     return loss
 
@@ -373,15 +404,106 @@ class ContrastivePretrainer(nn.Module):
             metrics: Dictionary of logging metrics
         """
         # Create augmented views
-        x1, ei1, ea1 = GraphAugmentor.combine_augmentations(
+        x1, ei1, ea1, keep_mask1 = GraphAugmentor.combine_augmentations(
             x, edge_index, edge_attr, aug_type=aug_type1
         )
-        x2, ei2, ea2 = GraphAugmentor.combine_augmentations(
+        x2, ei2, ea2, keep_mask2 = GraphAugmentor.combine_augmentations(
             x, edge_index, edge_attr, aug_type=aug_type2
         )
 
-        # Forward pass
-        z1, z2 = self.forward_pair(x1, ei1, ea1, x2, ei2, ea2, **kwargs)
+        # Update batch tensor and hyperedge_members if nodes were dropped
+        kwargs_view1 = kwargs.copy()
+        kwargs_view2 = kwargs.copy()
+
+        if 'batch' in kwargs:
+            batch_orig = kwargs['batch']
+
+            # Update batch tensor for view 1
+            if keep_mask1 is not None:
+                batch_view1 = batch_orig[keep_mask1]
+                # Remap batch indices to be contiguous
+                unique_batches = batch_view1.unique(sorted=True)
+                batch_mapping = torch.zeros(batch_orig.max().item() + 1,
+                                            dtype=torch.long, device=batch_orig.device)
+                for new_idx, old_idx in enumerate(unique_batches):
+                    batch_mapping[old_idx] = new_idx
+                kwargs_view1['batch'] = batch_mapping[batch_view1]
+
+                # Update hyperedge_members if present
+                if 'hyperedge_members' in kwargs and kwargs['hyperedge_members'] is not None:
+                    # Create node index mapping (old -> new)
+                    n_nodes_orig = keep_mask1.size(0)
+                    node_map = torch.zeros(n_nodes_orig, dtype=torch.long, device=x.device)
+                    node_map[keep_mask1] = torch.arange(keep_mask1.sum().item(), device=x.device)
+
+                    # Filter and remap hyperedge members
+                    new_hyperedge_members = []
+                    for members in kwargs['hyperedge_members']:
+                        # Keep only members that weren't dropped
+                        valid_members = [m for m in members if keep_mask1[m]]
+                        if len(valid_members) > 0:
+                            # Remap to new indices
+                            new_members = [node_map[m].item() for m in valid_members]
+                            new_hyperedge_members.append(new_members)
+
+                    kwargs_view1['hyperedge_members'] = new_hyperedge_members if new_hyperedge_members else None
+
+                    # Also need to filter hyperedge_attr if present
+                    if 'hyperedge_attr' in kwargs and kwargs['hyperedge_attr'] is not None:
+                        if len(new_hyperedge_members) > 0:
+                            kwargs_view1['hyperedge_attr'] = kwargs['hyperedge_attr'][:len(new_hyperedge_members)]
+                        else:
+                            kwargs_view1['hyperedge_attr'] = None
+
+            # Update batch tensor for view 2
+            if keep_mask2 is not None:
+                batch_view2 = batch_orig[keep_mask2]
+                # Remap batch indices to be contiguous
+                unique_batches = batch_view2.unique(sorted=True)
+                batch_mapping = torch.zeros(batch_orig.max().item() + 1,
+                                            dtype=torch.long, device=batch_orig.device)
+                for new_idx, old_idx in enumerate(unique_batches):
+                    batch_mapping[old_idx] = new_idx
+                kwargs_view2['batch'] = batch_mapping[batch_view2]
+
+                # Update hyperedge_members if present
+                if 'hyperedge_members' in kwargs and kwargs['hyperedge_members'] is not None:
+                    # Create node index mapping (old -> new)
+                    n_nodes_orig = keep_mask2.size(0)
+                    node_map = torch.zeros(n_nodes_orig, dtype=torch.long, device=x.device)
+                    node_map[keep_mask2] = torch.arange(keep_mask2.sum().item(), device=x.device)
+
+                    # Filter and remap hyperedge members
+                    new_hyperedge_members = []
+                    for members in kwargs['hyperedge_members']:
+                        # Keep only members that weren't dropped
+                        valid_members = [m for m in members if keep_mask2[m]]
+                        if len(valid_members) > 0:
+                            # Remap to new indices
+                            new_members = [node_map[m].item() for m in valid_members]
+                            new_hyperedge_members.append(new_members)
+
+                    kwargs_view2['hyperedge_members'] = new_hyperedge_members if new_hyperedge_members else None
+
+                    # Also need to filter hyperedge_attr if present
+                    if 'hyperedge_attr' in kwargs and kwargs['hyperedge_attr'] is not None:
+                        if len(new_hyperedge_members) > 0:
+                            kwargs_view2['hyperedge_attr'] = kwargs['hyperedge_attr'][:len(new_hyperedge_members)]
+                        else:
+                            kwargs_view2['hyperedge_attr'] = None
+
+        # Forward pass with updated batch tensors
+        z1, _ = self.encoder(x1, ei1, ea1, **kwargs_view1)[:2]
+        z2, _ = self.encoder(x2, ei2, ea2, **kwargs_view2)[:2]
+
+        # Project
+        z1 = self.projection(z1)
+        z2 = self.projection(z2)
+
+        # Normalize if configured
+        if self.config.normalize_embeddings:
+            z1 = F.normalize(z1, dim=-1)
+            z2 = F.normalize(z2, dim=-1)
 
         # Compute InfoNCE loss
         loss = info_nce_loss(z1, z2, temperature=self.config.temperature)

@@ -76,7 +76,7 @@ class FiLMLayer(nn.Module):
         self.gamma_net = nn.Linear(d_state, d_node)
         self.beta_net = nn.Linear(d_state, d_node)
 
-    def forward(self, x: Tensor, state_emb: Tensor) -> Tensor:
+    def forward(self, x: Tensor, state_emb: Tensor, batch: Optional[Tensor] = None) -> Tensor:
         """
         Apply FiLM conditioning.
 
@@ -95,6 +95,10 @@ class FiLMLayer(nn.Module):
             return gamma * x + beta
         else:
             # Batched (would need batch indices)
+            if batch is None:
+                raise ValueError("batch tensor required for batched FiLM conditioning")
+            gamma = gamma[batch]  # (N, d_node)
+            beta = beta[batch]    # (N, d_node)
             return gamma * x + beta
 
 
@@ -175,7 +179,7 @@ class ResidueGNN(nn.Module):
 
             # FiLM conditioning
             if self.use_film and state_emb is not None:
-                x = self.film_layers[i](x, state_emb)
+                x = self.film_layers[i](x, state_emb, batch)
 
             x = F.relu(x)
             x = self.dropout(x)
@@ -268,10 +272,25 @@ class PocketEncoder(nn.Module):
         n_states: Number of possible states (2 for agonist/antagonist)
     """
 
+    def _init_weights(self):
+        """Initialize weights with careful scaling to prevent NaN."""
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                # Use Xavier initialization with smaller gain
+                nn.init.xavier_uniform_(m.weight, gain=0.5)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.LayerNorm):
+                nn.init.ones_(m.weight)
+                nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.Embedding):
+                nn.init.normal_(m.weight, mean=0.0, std=0.02)
+
     def __init__(self, d_node: int = 30, d_edge: int = 19, d_model: int = 256,
                  n_layers: int = 4, n_heads: int = 4, dropout: float = 0.1,
                  use_state_token: bool = True, d_state: int = 16, n_states: int = 2):
         super().__init__()
+
         self.d_model = d_model
         self.use_state_token = use_state_token
 
@@ -292,6 +311,7 @@ class PocketEncoder(nn.Module):
             nn.Linear(d_model, d_model),
             # nn.LayerNorm(d_model),    # Disabled LayerNorm - smoothing issues for now!
         )
+        self._init_weights()
 
     def forward(self, x: Tensor, edge_index: Tensor, edge_attr: Tensor,
                 state_id: Optional[Tensor] = None,

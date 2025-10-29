@@ -111,8 +111,20 @@ class BipartiteHypergraphAttention(nn.Module):
                     a2h_attn_weights.append(torch.zeros(0, device=x_atom.device))
                 continue
 
+            # ADDED: Validate indices before creating tensor
+            valid_members = [m for m in members if 0 <= m < n_atoms]
+            if len(valid_members) == 0:
+                print(f"WARNING: Hyperedge {h_idx} has no valid members (original: {members}, n_atoms: {n_atoms})")
+                hyper_messages.append(torch.zeros(1, self.d_atom, device=x_atom.device))
+                if return_attn and a2h_attn_weights is not None:
+                    a2h_attn_weights.append(torch.zeros(0, device=x_atom.device))
+                continue
+
+            if len(valid_members) != len(members):
+                print(f"WARNING: Hyperedge {h_idx} had invalid indices. Original: {members}, Valid: {valid_members}, n_atoms: {n_atoms}")
+
             # Get member atom features
-            member_indices = torch.tensor(members, dtype=torch.long, device=x_atom.device)
+            member_indices = torch.tensor(valid_members, dtype=torch.long, device=x_atom.device)
             x_members = x_atom[member_indices]  # (n_members, d_atom)
 
             # Multi-head attention: hyperedge queries atoms
@@ -129,8 +141,11 @@ class BipartiteHypergraphAttention(nn.Module):
             scores = torch.einsum('qhd,khd->qhk', q, k) * self.scale  # (1, H, n_members)
 
             # Size normalization (larger hyperedges get dampened)
-            size_norm = 1.0 / math.sqrt(len(members))
+            size_norm = 1.0 / math.sqrt(max(len(members), 4))  # Prevent division by small numbers
             scores = scores * size_norm
+
+            # Clip scores to prevent extreme values in softmax
+            scores = torch.clamp(scores, min=-5.0, max=5.0)
 
             attn = F.softmax(scores, dim=-1)  # (1, H, n_members)
             attn = self.dropout(attn)
@@ -157,7 +172,16 @@ class BipartiteHypergraphAttention(nn.Module):
             if len(members) == 0:
                 continue
 
-            member_indices = torch.tensor(members, dtype=torch.long, device=x_atom.device)
+            # ADDED: Validate indices before creating tensor (same as first loop)
+            valid_members = [m for m in members if 0 <= m < n_atoms]
+            if len(valid_members) == 0:
+                print(f"WARNING: Hyperedge {h_idx} has no valid members in h2a pass (original: {members}, n_atoms: {n_atoms})")
+                continue
+
+            if len(valid_members) != len(members):
+                print(f"WARNING: Hyperedge {h_idx} had invalid indices in h2a pass. Original: {members}, Valid: {valid_members}, n_atoms: {n_atoms}")
+
+            member_indices = torch.tensor(valid_members, dtype=torch.long, device=x_atom.device)
             x_recipients = x_atom[member_indices]  # (n_members, d_atom)
 
             # Multi-head attention: atoms query hyperedge
@@ -190,7 +214,7 @@ class BipartiteHypergraphAttention(nn.Module):
 
             if return_attn and h2a_attn_weights is not None:
                 attn_mean = attn.squeeze(-1).mean(1)  # (n_members,)
-                for i, member_idx in enumerate(members):
+                for i, member_idx in enumerate(valid_members):
                     h2a_attn_weights[member_idx].append((h_idx, attn_mean[i].item()))
 
         # Normalize by number of incident hyperedges
