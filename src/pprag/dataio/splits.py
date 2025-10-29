@@ -27,11 +27,13 @@ Author: Aaryesh Deshpande
 Last Modified: 10/25/2025
 """
 
-from typing import List, Tuple, Dict
+
 import random
 import json
 from pathlib import Path
-from collections import defaultdict
+import pandas as pd
+from collections import defaultdict, Counter
+from typing import List, Tuple, Dict
 from pprag.dataio.load_labels import load_ligands_csv
 from pprag.dataio.murcko import group_by_scaffold
 from pprag.dataio.schema import global_seed
@@ -89,22 +91,37 @@ def murcko_scaffold_split(lig_csv: str | Path,
 
 
 def stratified_scaffold_split(
-    df,                           # pandas DataFrame with columns: ligand_id, smiles, class_label, is_decoy
+    df: pd.DataFrame,
     frac: Tuple[float, float, float] = (0.8, 0.1, 0.1),
-    seed: int = SEED,
-    label_mode: str = "4way",     # "4way": agonist, antagonist, agonist_decoy, antagonist_decoy
-):
+    seed: int = 16,
+    label_mode: str = "4way",
+) -> Dict[str, List[str]]:
     """
-    Keep entire Murcko scaffolds intact AND stratify class proportions across train/val/test.
-    Returns: {"train": [...ligand_ids...], "val": [...], "test": [...]}
+    Stratified scaffold-based split that maintains scaffold integrity and class balance.
+
+    Args:
+        df: DataFrame with columns [ligand_id, smiles, class_label, is_decoy]
+        frac: Tuple of (train_frac, val_frac, test_frac), must sum to 1.0
+        seed: Random seed for reproducibility
+        label_mode: "4way" (agonist/antagonist/agonist_decoy/antagonist_decoy) or "2way"
+
+    Returns:
+        Dictionary with keys ["train", "val", "test"], values are lists of ligand_ids
+
+    Strategy:
+        1. Group ligands by scaffold (entire scaffold, not per-label)
+        2. Characterize each scaffold by its label composition
+        3. Greedily assign scaffolds to splits to balance class proportions
+        4. Each scaffold's ALL ligands go to the same split (scaffold integrity)
     """
-    assert abs(sum(frac) - 1.0) < 1e-6, "fractions must sum to 1.0"
+    assert abs(sum(frac) - 1.0) < 1e-6, f"fractions must sum to 1.0, got {sum(frac)}"
     rng = random.Random(seed)
 
-    # Normalize label to classes stratify on
+    # Label Normalization
     def norm_label(row):
         class_label = str(row["class_label"]).strip().lower()
         is_decoy = int(row["is_decoy"]) == 1
+
         if label_mode == "4way":
             if "agonist" in class_label and is_decoy:
                 return "agonist_decoy"
@@ -115,88 +132,141 @@ def stratified_scaffold_split(
             if "antagonist" in class_label:
                 return "antagonist"
             return "unknown"
-        else:
+        else:  # 2way mode
             if "agonist" in class_label:
                 return "agonist"
             if "antagonist" in class_label:
                 return "antagonist"
             return "unknown"
 
+    # Prepare dataframe
     df = df.copy()
+
+    # Compute scaffolds if not already present
     if "scaffold" not in df.columns:
-        df["scaffold"] = df["smiles"].map(_get_scaffold)
+        from pprag.dataio.murcko import scaffold_of_smiles
+        df["scaffold"] = df["smiles"].apply(scaffold_of_smiles)
 
     df["label_norm"] = df.apply(norm_label, axis=1)
     df = df.loc[df["label_norm"] != "unknown"].reset_index(drop=True)
 
-    # Build scaffold groups per label
-    groups_by_label: defaultdict[str, defaultdict[str, list[str]]] = defaultdict(lambda: defaultdict(list))  # label -> scaffold -> [ligand_id]
+    # Group ALL ligands by scaffold, regardless of label
+    scaffold_groups: Dict[str, List[str]] = defaultdict(list)
     for _, row in df.iterrows():
-        groups_by_label[row["label_norm"]][row["scaffold"]].append(row["ligand_id"])
+        scaffold_groups[row["scaffold"]].append(row["ligand_id"])
 
-    labels = sorted(groups_by_label.keys())
-    label_counts = {lbl: sum(len(v) for v in groups_by_label[lbl].values()) for lbl in labels}
+    # For each scaffold, count how many ligands of each label it contains
+    from typing import TypedDict
 
-    # Target counts per split, per label
-    targets = {
-        lbl: {
-            "train": int(round(label_counts[lbl] * frac[0])),
-            "val": int(round(label_counts[lbl] * frac[1])),
-            "test": int(round(label_counts[lbl] * frac[2])),
-        } for lbl in labels
+    class ScaffoldInfo(TypedDict):
+        scaffold: str
+        ligand_ids: list[str]
+        size: int
+        label_counts: dict[str, int]
+
+    scaffold_info: list[ScaffoldInfo] = []
+    for scaffold, ligand_ids in scaffold_groups.items():
+        # Get label distribution for this scaffold
+        ligand_ids_list: list[str] = list(ligand_ids)
+        scaffold_df = df[df["ligand_id"].isin(ligand_ids_list)]
+        label_counts_dict: dict[str, int] = dict(Counter(scaffold_df["label_norm"]))
+
+        scaffold_info.append({
+            "scaffold": str(scaffold),
+            "ligand_ids": ligand_ids_list,
+            "size": int(len(ligand_ids_list)),
+            "label_counts": label_counts_dict,
+        })
+
+    # Shuffle for randomness, then sort by size (greedy works better with large first)
+    rng.shuffle(scaffold_info)
+    scaffold_info.sort(key=lambda x: x["size"], reverse=True)
+
+    all_labels = sorted(set(df["label_norm"]))
+
+    # Total count per label
+    total_label_counts = {
+        lbl: int((df["label_norm"] == lbl).sum())
+        for lbl in all_labels
     }
-    # fix rounding drift
-    for lbl in labels:
-        tot = label_counts[lbl]
-        alloc = targets[lbl]["train"] + targets[lbl]["val"] + targets[lbl]["test"]
-        if alloc != tot:
-            targets[lbl]["train"] += (tot - alloc)
 
-    out: dict[str, list[str]] = {"train": [], "val": [], "test": []}
-    assigned = {lbl: {"train": 0, "val": 0, "test": 0} for lbl in labels}
+    # Target counts per split per label
+    targets = {
+        split: {
+            lbl: int(round(total_label_counts[lbl] * f))
+            for lbl in all_labels
+        }
+        for split, f in zip(["train", "val", "test"], frac)
+    }
 
-    # Greedy per-label assignment of whole scaffolds
-    for lbl in labels:
-        items = [(scf, len(ids)) for scf, ids in groups_by_label[lbl].items()]
-        rng.shuffle(items)
-        items.sort(key=lambda x: x[1], reverse=True)  # place big scaffolds first
-        for scf, sz in items:
-            need = {sp: targets[lbl][sp] - assigned[lbl][sp] for sp in ("train", "val", "test")}
-            # best split = highest remaining need (tie-breaker: train > val > test)
-            best = max(need.items(), key=lambda kv: (kv[1], {"train": 2, "val": 1, "test": 0}[kv[0]]))[0]
-            if need[best] <= 0:
-                best = min(assigned[lbl].items(), key=lambda kv: kv[1])[0]
-            out[best].extend(groups_by_label[lbl][scf])
-            assigned[lbl][best] += sz
+    # adjust train to ensure exact total
+    for lbl in all_labels:
+        total_target = sum(targets[sp][lbl] for sp in ["train", "val", "test"])
+        diff = total_label_counts[lbl] - total_target
+        if diff != 0:
+            targets["train"][lbl] += diff
 
-    # Minimal guarantee: if a split lacks a class entirely, move the smallest scaffold of that class to it
-    for lbl in labels:
-        present = {sp: any(df.loc[df["ligand_id"].isin(out[sp]), "label_norm"] == lbl) for sp in ("train", "val", "test")}
-        if all(present.values()):
-            continue
-        # Build scaffold→(size,split,ids) among already assigned ligands of this label
-        scf_info = []
-        for sp in ("train", "val", "test"):
-            ligs = [lid for lid in out[sp] if df.loc[df["ligand_id"] == lid, "label_norm"].iat[0] == lbl]
-            tmp = defaultdict(list)
-            for lid in ligs:
-                scf = df.loc[df["ligand_id"] == lid, "scaffold"].iat[0]
-                tmp[scf].append(lid)
-            for scf, ids in tmp.items():
-                scf_info.append((scf, len(ids), sp, ids))
-        scf_info.sort(key=lambda x: x[1])  # smallest first
+    # Greedy Scaffold Assignment
+    out: Dict[str, List[str]] = {"train": [], "val": [], "test": []}
+    assigned: Dict[str, Dict[str, int]] = {
+        split: {lbl: 0 for lbl in all_labels}
+        for split in ["train", "val", "test"]
+    }
 
-        for sp in ("train", "val", "test"):
-            if not present[sp]:
-                # move the smallest available scaffold of this label from any other split
-                for scf, sz, donor, ids in scf_info:
-                    if donor == sp:
-                        continue
-                    for lid in ids:
-                        out[donor].remove(lid)
-                    out[sp].extend(ids)
-                    present[sp] = True
-                    break
+    for scf_data in scaffold_info:
+        ligand_ids = scf_data["ligand_ids"]
+        label_counts = dict(scf_data["label_counts"])
+
+        # Calculate "need score" for each split
+        # Score = sum of (remaining need for each label) * (count of that label in scaffold)
+        # Higher score = this split needs this scaffold's labels more urgently
+        scores = {}
+        for split in ["train", "val", "test"]:
+            score = 0
+            for lbl, count in label_counts.items():
+                remaining_need = targets[split][lbl] - assigned[split][lbl]
+                score += remaining_need * count
+            scores[split] = score
+
+        # Assign scaffold to split with highest score
+        # Tie-breaker: prefer train > val > test
+        best_split = max(
+            scores.items(),
+            key=lambda kv: (kv[1], {"train": 2, "val": 1, "test": 0}[kv[0]])
+        )[0]
+
+        # If all needs are negative (overallocated), assign to least full split
+        if scores[best_split] < 0:
+            best_split = min(
+                assigned.items(),
+                key=lambda kv: sum(kv[1].values())  # Total ligands assigned to this split
+            )[0]
+
+        # Assign ENTIRE scaffold to this split
+        out[best_split].extend(ligand_ids)
+
+        # Update assigned counts for each label in this scaffold
+        for lbl, count in label_counts.items():
+            assigned[best_split][lbl] += count
+
+    # Check if each split has representation of each class
+    for split in ["train", "val", "test"]:
+        split_labels = set(df[df["ligand_id"].isin(out[split])]["label_norm"])
+        missing = set(all_labels) - split_labels
+        if missing:
+            import sys
+            print(
+                f"Warning: {split} split missing classes: {missing}",
+                file=sys.stderr
+            )
+            print(
+                "  This may occur with very small datasets or highly imbalanced classes.",
+                file=sys.stderr
+            )
+            print(
+                "  Consider using --no-stratified for pure scaffold-based splitting.",
+                file=sys.stderr
+            )
 
     return out
 
