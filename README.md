@@ -2,12 +2,10 @@
 
 # PPAR-γ Protein-Ligand Interaction Prediction with Graph Neural Networks
 
-<img src="https://img.shields.io/badge/Course-CSE8803%20MLG-blue?style=for-the-badge" alt="Course">
-<img src="https://img.shields.io/badge/Georgia%20Tech-B3A369?style=for-the-badge&logo=google-scholar&logoColor=white" alt="Georgia Tech">
-
----
 
 ### CSE-8803: Machine Learning with Graphs - Fall 2025
+
+**Project by MLG-Team 6**
 
 A Graph Neural Network approach for predicting PPAR-gamma protein-ligand interactions using graph representations and protein language models
 
@@ -109,5 +107,21 @@ We would like to express our sincere gratitude to:
 - The open-source community behind **PyTorch Geometric**, **RDKit**, **Scikit-learn**, and **Biopython** for their excellent tools and documentation
 
 This work builds upon the rich literature in graph-based drug discovery, DTA models and protein-ligand interaction prediction.
+
+---
+
+<div align="center">
+
+### 🐝 Georgia Institute of Technology
+
+**CSE-8803: Machine Learning with Graphs | Fall 2025**
+
+*School of Computational Science and Engineering*
+
+---
+
+<img src="https://img.shields.io/badge/Georgia%20Tech-B3A369?style=for-the-badge&logo=google-scholar&logoColor=white" alt="Georgia Tech">
+<img src="https://img.shields.io/badge/CSE-8803-003057?style=for-the-badge" alt="Course">
+</div>
 
 ---
