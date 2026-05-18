@@ -5,8 +5,6 @@
 
 ### CSE-8803: Machine Learning with Graphs - Fall 2025
 
-**Project by MLG-Team 6**
-
 A Graph Neural Network approach for predicting PPAR-gamma protein-ligand interactions using graph representations and protein language models
 
 ---
@@ -21,38 +19,6 @@ A Graph Neural Network approach for predicting PPAR-gamma protein-ligand interac
 </div>
 
 </div>
-
----
-
-## 👥 Team Members - Team 6
-
-<table align="center">
-  <tr>
-    <td align="center">
-      <strong>Ankit Bansal</strong><br>
-      <sub>Georgia Institute of Technology</sub>
-    </td>
-    <td align="center">
-      <strong>Aaryesh Deshpande</strong><br>
-      <sub>Georgia Institute of Technology</sub>
-    </td>
-    <td align="center">
-      <strong>Hargobind Singh</strong><br>
-      <sub>Georgia Institute of Technology</sub>
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <strong>Lingyu Kong</strong><br>
-      <sub>Georgia Institute of Technology</sub>
-    </td>
-    <td align="center">
-      <strong>Sudarshan Anand</strong><br>
-      <sub>Georgia Institute of Technology</sub>
-    </td>
-    <td></td>
-  </tr>
-</table>
 
 ---
 
