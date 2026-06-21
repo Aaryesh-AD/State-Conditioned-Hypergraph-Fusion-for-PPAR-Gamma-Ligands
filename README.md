@@ -3,7 +3,7 @@
 # PPAR-γ Protein-Ligand Interaction Prediction with Graph Neural Networks
 
 
-### CSE-8803: Machine Learning with Graphs - Fall 2025
+### Machine Learning with Graphs
 
 A Graph Neural Network approach for predicting PPAR-gamma protein-ligand interactions using graph representations and protein language models
 
@@ -80,7 +80,7 @@ This work builds upon the rich literature in graph-based drug discovery, DTA mod
 
 ### 🐝 Georgia Institute of Technology
 
-**CSE-8803: Machine Learning with Graphs | Fall 2025**
+**Machine Learning with Graphs | Fall 2025**
 
 *School of Computational Science and Engineering*
 
